@@ -27,7 +27,7 @@ costs_db = [
 ]
 
 
-@app.get("/costs_list/")
+@app.get("/costs")
 def get_cost_list(
     search: Optional[str] = Query(None, max_length=50, pattern="^[^0-9]*$")
 ):
@@ -43,7 +43,7 @@ def get_cost_list(
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
-@app.get("/cost_detail/{item_id}")
+@app.get("/costs/{item_id}")
 def get_cost_detail(
     item_id: int = Path(description="The id of the item to get", gt=0)
 ):
@@ -61,6 +61,11 @@ def create_cost(
     description: str = Form(min_length=3, max_length=20),
     amount: Decimal = Form(max_digits=10, decimal_places=2),
 ):
+    if amount <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Amount must be greater than 0",
+        )
     global index
     new_item = {
         "id": index + 1,
@@ -73,7 +78,7 @@ def create_cost(
     return JSONResponse(content=new_item, status_code=status.HTTP_201_CREATED)
 
 
-@app.put("/edit_cost/{item_id}/")
+@app.put("/costs/{item_id}")
 def edit_cost(
     item_id: int,
     description: str = Form(min_length=3, max_length=20),
@@ -81,6 +86,11 @@ def edit_cost(
 ):
     for item in costs_db:
         if item["id"] == item_id:
+            if amount <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Amount must be greater than 0",
+                )
             item["description"] = description
             item["amount"] = float(amount)
             return JSONResponse(
@@ -92,7 +102,7 @@ def edit_cost(
     )
 
 
-@app.delete("/delete_cost/{item_id}/")
+@app.delete("/costs/{item_id}")
 def delete_cost(item_id: int):
     for i, n in enumerate(costs_db):
         if n["id"] == item_id:
