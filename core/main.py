@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Query, status, Path, HTTPException, Form
+from fastapi import FastAPI, Query, status, Path, HTTPException
 from fastapi.responses import JSONResponse
+from typing import Optional, List
 
-from typing import Optional
-from decimal import Decimal
+from schemas import CostResponseSchema, CostCreateSchema, CostUpdateSchema
+
 
 app = FastAPI()
 
@@ -27,79 +28,64 @@ costs_db = [
 ]
 
 
-@app.get("/costs")
+@app.get(
+    "/costs",
+    response_model=List[CostResponseSchema],
+    status_code=status.HTTP_200_OK,
+)
 def get_cost_list(
     search: Optional[str] = Query(None, max_length=50, pattern="^[^0-9]*$")
 ):
     result = costs_db
     if search:
         result = [
-            item
-            for item in costs_db
-            if search.lower() in item["description"].lower()
+            item for item in costs_db if search.lower() in item["description"].lower()
         ]
-    for item in result:
-        item["amount"] = float(item["amount"])
-    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+    return result
 
 
-@app.get("/costs/{item_id}")
-def get_cost_detail(
-    item_id: int = Path(description="The id of the item to get", gt=0)
-):
+@app.get(
+    "/costs/{item_id}",
+    response_model=CostResponseSchema,
+    status_code=status.HTTP_200_OK,
+)
+def get_cost_detail(item_id: int = Path(description="The id of the item to get", gt=0)):
     for item in costs_db:
         if item["id"] == item_id:
-            item["amount"] = float(item["amount"])
-            return JSONResponse(content=item, status_code=status.HTTP_200_OK)
-    raise HTTPException(
-        detail="Item not found", status_code=status.HTTP_404_NOT_FOUND
-    )
+            return item
+    raise HTTPException(detail="Item not found", status_code=status.HTTP_404_NOT_FOUND)
 
 
-@app.post("/costs")
-def create_cost(
-    description: str = Form(min_length=3, max_length=20),
-    amount: Decimal = Form(max_digits=10, decimal_places=2),
-):
-    if amount <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Amount must be greater than 0",
-        )
+@app.post(
+    "/costs",
+    response_model=CostResponseSchema,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_cost(cost: CostCreateSchema):
     global index
-    new_item = {
+    cost_obj = {
         "id": index + 1,
-        "description": description,
-        "amount": float(amount),
+        "description": cost.description,
+        "amount": cost.amount,
     }
-    costs_db.append(new_item)
-    if new_item:
+    if cost_obj:
         index += 1
-    return JSONResponse(content=new_item, status_code=status.HTTP_201_CREATED)
+    costs_db.append(cost_obj)
+    return cost_obj
 
 
-@app.put("/costs/{item_id}")
-def edit_cost(
-    item_id: int,
-    description: str = Form(min_length=3, max_length=20),
-    amount: Decimal = Form(max_digits=10, decimal_places=2),
-):
+@app.put(
+    "/costs/{item_id}",
+    response_model=CostResponseSchema,
+    status_code=status.HTTP_200_OK,
+)
+def edit_cost(item_id: int, cost: CostUpdateSchema):
     for item in costs_db:
         if item["id"] == item_id:
-            if amount <= 0:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Amount must be greater than 0",
-                )
-            item["description"] = description
-            item["amount"] = float(amount)
-            return JSONResponse(
-                content=f"Item with id={item_id} updated successfully",
-                status_code=status.HTTP_200_OK,
-            )
-    raise HTTPException(
-        detail="Item not found", status_code=status.HTTP_404_NOT_FOUND
-    )
+            item["description"] = cost.description
+            item["amount"] = cost.amount
+            return item
+    raise HTTPException(detail="Item not found", status_code=status.HTTP_404_NOT_FOUND)
 
 
 @app.delete("/costs/{item_id}")
@@ -111,6 +97,4 @@ def delete_cost(item_id: int):
                 content={"detail": "item deleted successfully"},
                 status_code=status.HTTP_204_NO_CONTENT,
             )
-    raise HTTPException(
-        detail="Item not found", status_code=status.HTTP_404_NOT_FOUND
-    )
+    raise HTTPException(detail="Item not found", status_code=status.HTTP_404_NOT_FOUND)
